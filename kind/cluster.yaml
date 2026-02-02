@@ -1,0 +1,19 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+
+# 2 control-plane + 3 workers
+nodes:
+  - role: control-plane
+    # Expose standard HTTP/HTTPS locally (optional but convenient)
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+  - role: control-plane
+  - role: worker
+  - role: worker
+  - role: worker
+

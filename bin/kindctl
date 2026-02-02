@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# shellcheck source=../scripts/lib/log.sh
+source "${REPO_ROOT}/scripts/lib/log.sh"
+# shellcheck source=../scripts/lib/deps.sh
+source "${REPO_ROOT}/scripts/lib/deps.sh"
+# shellcheck source=../scripts/lib/kind.sh
+source "${REPO_ROOT}/scripts/lib/kind.sh"
+
+KINDCTL_VERSION="0.1.0"
+
+usage() {
+  cat <<'EOF'
+kindctl - local Kubernetes clusters with kind
+
+Usage:
+  kindctl [flags] <command> [args...]
+
+Cluster lifecycle:
+  up           Create the cluster
+  down         Delete the cluster
+  status       Show cluster status and nodes
+  nodes        List kind node containers
+  kubeconfig   Print kubeconfig path for the cluster
+  version      Print version
+  help         Show help
+
+Kubectl pass-through (like oc):
+  kindctl get pods
+  kindctl get nodes -A
+  kindctl apply -f deploy.yaml
+  ... any kubectl subcommand
+
+Flags (before command):
+  --name <name>       Cluster name (default: kindctl)
+  --config <path>     Kind cluster config yaml (default: kind/cluster.yaml)
+  --kubeconfig <path> Where to write kubeconfig (default: .kube/kubeconfig-<name>)
+
+Examples:
+  kindctl up
+  kindctl --name dev status
+  kindctl get pods -A
+  kindctl get nodes
+EOF
+}
+
+require_file() {
+  local path="$1"
+  [[ -f "${path}" ]] || kindctl_die "File not found: ${path}"
+}
+
+# Run kubectl against the kindctl cluster (like oc vs kubectl).
+run_kubectl() {
+  local cluster_name="$1"
+  local kubeconfig_path
+  kubeconfig_path="$(kindctl_kubeconfig_path_for "${cluster_name}")"
+  [[ -f "${kubeconfig_path}" ]] || kindctl_die "Cluster '${cluster_name}' not found or no kubeconfig. Run: kindctl up"
+  kindctl_require_kubectl
+  exec env KUBECONFIG="${kubeconfig_path}" kubectl "$@"
+}
+
+main() {
+  local cluster_name="kindctl"
+  local config_path="${REPO_ROOT}/kind/cluster.yaml"
+  local kubeconfig_path=""
+
+  # Parse global flags only (before command).
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name)
+        cluster_name="${2:-}"; shift 2 || true
+        ;;
+      --config)
+        config_path="${2:-}"; shift 2 || true
+        ;;
+      --kubeconfig)
+        kubeconfig_path="${2:-}"; shift 2 || true
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  [[ -n "${cluster_name}" ]] || kindctl_die "--name cannot be empty"
+  [[ -n "${config_path}" ]] || kindctl_die "--config cannot be empty"
+
+  if [[ -z "${kubeconfig_path}" ]]; then
+    kubeconfig_path="$(kindctl_kubeconfig_path_for "${cluster_name}")"
+  fi
+
+  local cmd="${1:-help}"
+  shift || true
+
+  # Built-in commands.
+  case "${cmd}" in
+    up)
+      kindctl_banner
+      kindctl_require_docker
+      kindctl_require_kind
+      kindctl_require_kubectl
+      require_file "${config_path}"
+      kindctl_kind_up "${cluster_name}" "${config_path}" "${kubeconfig_path}"
+      kindctl_log "Done. Try: kindctl get nodes"
+      ;;
+    down)
+      kindctl_banner
+      kindctl_require_kind
+      kindctl_kind_down "${cluster_name}" "${kubeconfig_path}"
+      ;;
+    status)
+      kindctl_banner
+      kindctl_require_kind
+      kindctl_require_kubectl
+      kindctl_kind_status "${cluster_name}" "${kubeconfig_path}"
+      ;;
+    nodes)
+      kindctl_require_kind
+      kindctl_kind_nodes "${cluster_name}"
+      ;;
+    kubeconfig)
+      echo "${kubeconfig_path}"
+      ;;
+    version)
+      echo "${KINDCTL_VERSION}"
+      ;;
+    help|--help|-h|"")
+      usage
+      ;;
+    *)
+      # Pass-through to kubectl (e.g. kindctl get pods, kindctl apply -f x).
+      run_kubectl "${cluster_name}" "${cmd}" "$@"
+      ;;
+  esac
+}
+
+main "$@"
+

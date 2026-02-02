@@ -1,0 +1,11 @@
+/.DS_Store
+/.idea/
+/.vscode/
+
+# kube / kind artifacts
+/.kube/
+*.kubeconfig
+
+# logs
+*.log
+
