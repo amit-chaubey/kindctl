@@ -13,12 +13,35 @@ kindctl_kubeconfig_path_for() {
   echo "${repo_root}/.kube/kubeconfig-${cluster_name}"
 }
 
+# Returns 0 if cluster exists, 1 otherwise.
+kindctl_cluster_exists() {
+  local cluster_name="$1"
+  local c
+  while IFS= read -r c; do
+    [[ -z "${c}" ]] && continue
+    if [[ "${c}" == "${cluster_name}" ]]; then
+      return 0
+    fi
+  done < <(kind get clusters)
+  return 1
+}
+
 kindctl_kind_up() {
   local cluster_name="$1"
   local config_path="$2"
   local kubeconfig_path="$3"
 
   mkdir -p "$(dirname "${kubeconfig_path}")"
+
+  if kindctl_cluster_exists "${cluster_name}"; then
+    kindctl_log "Cluster '${cluster_name}' already exists"
+    if [[ ! -f "${kubeconfig_path}" ]]; then
+      kindctl_log "Writing kubeconfig to ${kubeconfig_path}"
+      kind get kubeconfig --name "${cluster_name}" > "${kubeconfig_path}"
+    fi
+    kindctl_log "Next: export KUBECONFIG=\"\$(kindctl kubeconfig)\" && kubectl get nodes"
+    return 0
+  fi
 
   kindctl_log "Creating kind cluster '${cluster_name}'"
   kind create cluster \
@@ -27,7 +50,7 @@ kindctl_kind_up() {
     --kubeconfig "${kubeconfig_path}"
 
   kindctl_log "Kubeconfig written to: ${kubeconfig_path}"
-  kindctl_log "Validating cluster access"
+  kindctl_log "Next: export KUBECONFIG=\"\$(kindctl kubeconfig)\" && kubectl get nodes"
   KUBECONFIG="${kubeconfig_path}" kubectl cluster-info >/dev/null
 }
 
