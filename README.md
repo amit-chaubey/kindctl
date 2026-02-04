@@ -7,8 +7,8 @@ This repo ships a default topology of **2 control-plane nodes** and **3 worker n
 ## What you get
 
 - **2 control-planes + 3 workers** by default (Kind config in `kind/cluster.yaml`)
-- Single CLI: **`kindctl`** (cluster lifecycle + kubectl pass-through, like `oc`)
-- Put `bin/` on PATH and run `kindctl get pods`, `kindctl up`, etc. from anywhere
+- **`kindctl`** for cluster lifecycle (up, down, status, kubeconfig)
+- Use **`kubectl`** for pods, nodes, apply, etc. (set `KUBECONFIG` from `kindctl kubeconfig`)
 - Deterministic kubeconfig in `.kube/` (per cluster); Make targets (`make up`, `make down`)
 
 ## Prerequisites
@@ -78,18 +78,12 @@ Create the default cluster:
 kindctl up
 ```
 
-Use kubectl via kindctl (no `export KUBECONFIG` needed):
-
-```bash
-kindctl get nodes
-kindctl get pods -A
-```
-
-Or use kubeconfig directly:
+Use **kubectl** for pods, nodes, and all workload commands:
 
 ```bash
 export KUBECONFIG="$(kindctl kubeconfig)"
 kubectl get nodes
+kubectl get pods -A
 ```
 
 Delete the cluster:
@@ -100,7 +94,7 @@ kindctl down
 
 ## Commands
 
-**Cluster lifecycle:**
+**Cluster lifecycle (kindctl):**
 
 ```bash
 kindctl up
@@ -112,22 +106,23 @@ kindctl version
 kindctl help
 ```
 
-**Kubectl pass-through (like OpenShift `oc`):**
+**Pods, nodes, and workloads (kubectl):**
 
 ```bash
-kindctl get pods
-kindctl get pods -A
-kindctl get nodes -o wide
-kindctl apply -f deploy.yaml
-kindctl delete pod my-pod
-# ... any kubectl subcommand
+export KUBECONFIG="$(kindctl kubeconfig)"
+kubectl get nodes
+kubectl get pods -A
+kubectl apply -f deploy.yaml
+kubectl delete pod my-pod
+# ... any kubectl command
 ```
 
 **With a named cluster:**
 
 ```bash
 kindctl --name dev up
-kindctl --name dev get pods
+export KUBECONFIG="$(kindctl --name dev kubeconfig)"
+kubectl get pods -A
 kindctl --name dev down
 ```
 
